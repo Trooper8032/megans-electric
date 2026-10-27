@@ -1,0 +1,1 @@
+var e=null;async function t(){if(e)return e;try{let t=await fetch(`/megans-electric/img/logo-640.png`);if(!t.ok)return null;let n=new Uint8Array(await t.arrayBuffer()),r=``;for(let e=0;e<n.length;e+=8192)r+=String.fromCharCode(...n.subarray(e,e+8192));return e=`data:image/png;base64,`+btoa(r),e}catch{return null}}export{t as logoDataUrl};
