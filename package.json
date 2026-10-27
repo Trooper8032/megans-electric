@@ -1,0 +1,31 @@
+{
+  "name": "megans-v2",
+  "private": true,
+  "version": "2.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1 --port 5173",
+    "build": "vite build",
+    "preview": "vite preview --host 127.0.0.1 --port 4328 --strictPort",
+    "test": "vitest run",
+    "e2e": "/workspace/.venv-pw/bin/python scripts/e2e.py",
+    "capturas": "/workspace/.venv-pw/bin/python scripts/e2e.py",
+    "logo": "python3 scripts/logo.py"
+  },
+  "dependencies": {
+    "@huggingface/transformers": "^3.8.1",
+    "jspdf": "^4.2.1",
+    "onnxruntime-web": "^1.22.0-dev.20250409-89f8206ba4",
+    "qrcode-generator": "^2.0.4",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "tesseract.js": "^7.0.0",
+    "xlsx": "^0.18.5"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^6.1.2",
+    "axe-core": "^4.14.0",
+    "vite": "^8.3.4",
+    "vitest": "^5.0.4"
+  }
+}
