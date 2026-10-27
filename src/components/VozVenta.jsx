@@ -51,7 +51,7 @@ export default function VozVenta({ productos, items, setItems, setMedio, setClie
   return (
     <section className="tarjeta ia-tarjeta" aria-label="Vender por voz">
       <div className="ia-cab"><h2><Icono n="microfono" />Vender por voz <span className="chip azul">Nuevo</span></h2></div>
-      <Microfono etiqueta="Dictar la venta" ejemplo="Di: cantidad, producto, cómo pagó y el cliente. Ej.: «Dos interruptores simples y un enchufe reversible, Yape, cliente Juan»." onTexto={entender} />
+      <Microfono etiqueta="Dictar la venta" ejemplo="Di: cantidad, producto, cómo pagó y el cliente. Ej.: «Dos interruptores simples y un enchufe reversible, Yape, cliente Juan»." onTexto={entender} onEmpezar={() => setRes(null)} />
       {res && <div className="ia-res" role="status">
         <p className="ia-escuche">Escuché: «{res.texto}»</p>
         {!res.lineas.length && <p className="alerta ambar"><Icono n="alerta" />No reconocimos productos. Di la cantidad y el nombre, por ejemplo «tres cajas de dos polos».</p>}

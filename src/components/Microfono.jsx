@@ -7,12 +7,12 @@ export function Progreso({ estado }) {
   if (!estado) return null
   return <div className="ia-prog" role="status"><span>{estado.texto}</span>{estado.pct != null && <span className="ia-barra" aria-hidden="true"><span style={{ width: `${Math.max(3, Math.min(100, estado.pct))}%` }} /></span>}</div>
 }
-export default function Microfono({ etiqueta = 'Hablar', ejemplo, onTexto, ocupado = false, clase = '' }) {
+export default function Microfono({ etiqueta = 'Hablar', ejemplo, onTexto, onEmpezar, ocupado = false, clase = '' }) {
   const id = useId(), [grab, setGrab] = useState(false), [seg, setSeg] = useState(0), [estado, setEstado] = useState(null), [err, setErr] = useState(''), [escribir, setEscribir] = useState(false), [txt, setTxt] = useState(''), [trabajando, setTrabajando] = useState(false)
   const rec = useRef(null), iv = useRef(null), sub = useRef(null)
   useEffect(() => () => { clearInterval(iv.current); try { rec.current?.stop() } catch { /* nada */ } }, [])
   const procesar = async blob => {
-    setErr(''); setTrabajando(true)
+    setErr(''); setTrabajando(true); onEmpezar?.()
     try { const t = await transcribir(blob, (texto, pct) => setEstado({ texto, pct })); setEstado(null); if (!t.trim()) setErr('No escuchamos nada. Habla más cerca del celular e inténtalo otra vez.'); else onTexto(t, { voz: true }) }
     catch (e) { console.error(e); setEstado(null); setErr('No pudimos escuchar el audio. Inténtalo otra vez o escríbelo.') }
     setTrabajando(false)

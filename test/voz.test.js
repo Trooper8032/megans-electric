@@ -70,6 +70,12 @@ describe('venta por voz', async () => {
     const v = entenderVenta('dos sockets wall loza a 4 soles, plin operación 12345678, cliente Pedro', P)
     expect(v).toMatchObject({ medio: 'Plin', operacion: '12345678', cliente: 'Pedro' }); expect(v.lineas[0]).toMatchObject({ cantidad: 2, nombre: 'Socket Wall loza', precio: 4 })
   })
+  it('producto que no existe se marca con lo dicho y nunca se agrega; ambiguo trae opciones', () => {
+    const v = entenderVenta('tres focos led y un tomacorriente doble, efectivo', P)
+    expect(v.lineas[0]).toMatchObject({ cantidad: 3, encontrado: false }); expect(v.lineas[0].nombreDicho).toMatch(/foco/)
+    expect(v.lineas[0].productoId ?? null).toBeNull()
+    expect(v.lineas[1].duda).toBe(true); expect(v.lineas[1].opciones.length).toBeGreaterThan(1)
+  })
   it('sin medio dicho no inventa uno', () => { expect(entenderVenta('un interruptor doble', P).medio).toBeNull() })
 })
 
