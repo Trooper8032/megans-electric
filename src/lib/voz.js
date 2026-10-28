@@ -124,7 +124,7 @@ function sacarOperacion(t) {
   return m ? { operacion: m[1].replace(/[\s-]/g, ''), resto: t.replace(m[0], ' , ') } : { operacion: '', resto: t }
 }
 const VERBOS = /^(?:(?:vende(?:r|me)?|venta(?: de)?|vendo|vendi|vendí|agrega(?:r|me)?|anota(?:r)?|pon(?:er|me)?|dame|deme|quiero|llevo|lleva|se lleva|son|es|registra(?:r)?|cobra(?:r)?|necesito|me da|me das|y|tambien|también|ademas|además)\s+)+/i
-const UNIDAD = /^(?:unidades?|und|unid|piezas?|pzas?|cajas? de\s+(?=\d)|paquetes? de)\s+(?:de\s+)?/i
+const UNIDAD = /^(?:unidades?|und|unid|piezas?|pzas?|metros?|mts?|rollos?|cajas? de\s+(?=\d)|paquetes? de)\s+(?:de\s+)?/i
 export function cantidadInicial(seg) {
   let s = seg.trim().replace(VERBOS, ''), cantidad = null
   let m = /^(\d+(?:[.,]\d+)?)\s+(?:docenas?|doc)\s+(?:de\s+)?/i.exec(s); if (m) { cantidad = Number(m[1].replace(',', '.')) * 12; s = s.slice(m[0].length) }
@@ -147,9 +147,15 @@ export function partirItems(t) {
 function lineasDe(texto, productos, { precios = false } = {}) {
   return partirItems(texto).map(seg => {
     const pr = precios ? sacarPrecio(seg) : { precio: null, resto: seg }
-    const { cantidad, dicha, resto } = cantidadInicial(pr.resto)
+    let { cantidad, dicha, resto } = cantidadInicial(pr.resto)
     if (!/[a-zñáéíóú]{3,}/i.test(resto)) return null
-    const b = buscarProducto(resto, productos)
+    let b = buscarProducto(resto, productos)
+    // Cantidad dicha DESPUÉS del producto ("focos led 3", "interruptor 2"): solo si el número no es parte del nombre ("cable 14").
+    const fin = !dicha && /^(.*?[a-zñáéíóú.])\s+(\d+(?:[.,]\d+)?)$/i.exec(resto)
+    if (fin && !/(?:\bpolos?|\bx|\bpor|\bn[uú]mero|\bnro\.?|\bde)$/i.test(fin[1])) {
+      const r2 = cantidadInicial(fin[1]), b2 = buscarProducto(r2.resto, productos)
+      if (b2.puntaje >= b.puntaje - 0.02) { cantidad = Number(fin[2].replace(',', '.')); dicha = true; resto = r2.resto; b = b2 }
+    }
     const p = b.producto, stockOk = p ? p.stock : null
     return { texto: seg, nombreDicho: resto, cantidad, cantidadDicha: dicha, productoId: p?.id || null, nombre: p?.nombre || '', puntaje: b.puntaje, opciones: b.opciones, duda: !p || b.duda, encontrado: !!p, stock: stockOk, ...(pr.precio ? { precio: pr.precio } : {}) }
   }).filter(Boolean)
@@ -157,14 +163,53 @@ function lineasDe(texto, productos, { precios = false } = {}) {
 
 // ---------- 1) Venta por voz ----------
 // "Dos cables número 12 y un tomacorriente doble, Yape, cliente Juan"
+const VERBO_VENTA = /(?<![\p{L}\d])(?:le\s+)?(?:vend[ií](?:mos)?|vendo|(?:me|nos)\s+compr(?:[oó]|aron)|se\s+llev(?:[oó]|aron))(?![\p{L}\d])/giu
+// Palabras que nunca son el nombre del cliente
+const NO_NOMBRE = new Set(['cuenta', 'credito', 'contado', 'yape', 'plin', 'efectivo', 'pendiente', 'fiado', 'la', 'el', 'los', 'las', 'un', 'una', 'mi', 'su', 'nombre', 'precio', 'cada', 'en', 'con', 'por', 'y', 'que', 'me', 'nos', 'le', 'se', 'ya', 'pago', 'paga', 'cliente', 'venta', 'vendedor', 'vendedora', 'soles', 'sol', 'mano', 'cash', 'operacion', 'de', 'del', 'al', 'total', 'todo', 'todos', 'eso', 'esto', 'mas', 'tambien', 'ademas', 'hoy', 'ayer', 'favor', 'nada', 'ok', 'listo', 'si', 'no', 'agregar', 'quitar'])
+const esNombre = (n, productos) => { const ws = sinTilde(n).split(/\s+/).filter(Boolean); return ws.length > 0 && ws.length <= 3 && ws.every(w => /^[a-zñ]{2,}$/.test(w) && !NO_NOMBRE.has(w)) && buscarProducto(n, productos).puntaje < 0.5 }
+// Cliente dicho sin la palabra "cliente": "Juan me compró…", "…a Juan en efectivo", "para Rosa".
+function sacarClienteLibre(t, productos) {
+  let m = /((?:\p{L}+\s+){0,3}?\p{L}+)\s+(?:me|nos|le)\s+compr(?:[oó]|aron)(?![\p{L}\d])/iu.exec(t)
+  if (m) {
+    const ws = m[1].split(/\s+/); let i = ws.length
+    while (i > 0 && !NO_NOMBRE.has(sinTilde(ws[i - 1])) && /^\p{L}{2,}$/u.test(ws[i - 1])) i--
+    const n = ws.slice(i).filter(w => !/^(?:don|doña|dona|señor|señora|sr|sra)$/i.test(w)).join(' ')
+    if (n && esNombre(n, productos)) { const ini = m.index + m[0].indexOf(ws.slice(i).join(' ')); return { cliente: capNombre(n), resto: t.slice(0, ini) + ' , ' + t.slice(m.index + m[0].length) } }
+  }
+  const re = /\b(?:a|para)\s+(?:(?:don|doña|dona|el señor|la señora)\s+)?(\p{L}+(?:\s+\p{L}+)?)(?=\s*(?:[,.;]|$|\b(?:en|con|por|y|que|pag\w*|yape\w*|plin\w*|efectivo|al contado|fiado)\b))/giu
+  while ((m = re.exec(t))) {
+    let n = m[1]; if (n.split(/\s+/).length === 2 && !esNombre(n, productos)) n = n.split(/\s+/)[0]
+    if (esNombre(n, productos)) return { cliente: capNombre(n), resto: t.slice(0, m.index) + ' , ' + t.slice(m.index + m[0].length) }
+  }
+  return { cliente: '', resto: t }
+}
+// "vendedor Carlos" / "vendedor 1": solo se devuelve lo dicho; quién puede elegir vendedor lo decide la capa de datos.
+function sacarVendedor(t) {
+  const m = /\b(?:vendedor|vendedora|vendió|vendio)\s*[:,]?\s*([\p{L}\d]+(?:\s+(?!(?:en|con|por|y|cliente|efectivo|yape|plin)\b)[\p{L}\d]+)?)/iu.exec(t)
+  if (!m || NO_NOMBRE.has(sinTilde(m[1].split(/\s+/)[0]))) return { vendedor: '', resto: t }
+  return { vendedor: m[1].trim(), resto: t.slice(0, m.index) + ' , ' + t.slice(m.index + m[0].length) }
+}
+export function buscarUsuario(nombre, usuarios = []) {
+  const q = sinTilde(nombre).trim(); if (!q) return null
+  const act = usuarios.filter(u => u.activo !== false)
+  return act.find(u => sinTilde(u.nombre) === q || sinTilde(u.usuario || '') === q) || act.find(u => sinTilde(u.nombre).split(/\s+/).includes(q) || sinTilde(u.nombre).endsWith(' ' + q) || sinTilde(u.nombre).startsWith(q + ' ')) || null
+}
 export function entenderVenta(texto, productos) {
   let t = numerosATexto(' ' + String(texto || '').replace(/\s+/g, ' ') + ' ')
-  const cl = sacarCliente(t); t = cl.resto
+  const ve = sacarVendedor(t); t = ve.resto
+  let cl = sacarCliente(t); t = cl.resto
+  if (!cl.cliente) { cl = sacarClienteLibre(t, productos); t = cl.resto }
+  t = t.replace(VERBO_VENTA, ' , ')
   const op = sacarOperacion(t); t = op.resto
   const medio = medioDe(t)
   t = t.replace(/\b(?:(?:y\s+)?(?:paga|pago|pagó|pagaron|pagando|pagará|cancela|cancelo|canceló)(?:\s+(?:con|en|por|al))?)\b/gi, ' , ').replace(MEDIO_RE, ' , ').replace(/\b(?:con|en|por)\s*(?=,)/gi, ' ')
-  const lineas = lineasDe(t, productos, { precios: true })
-  return { texto: String(texto || '').trim(), lineas, medio, cliente: cl.cliente, operacion: op.operacion }
+  let lineas = lineasDe(t, productos, { precios: true }), cliente = cl.cliente
+  // Un nombre suelto entre comas ("…, Juan, …") que no se parece a ningún producto es el cliente.
+  if (!cliente) {
+    const i = lineas.findIndex(l => !l.cantidadDicha && !l.encontrado && !l.opciones.length && esNombre(l.nombreDicho, productos))
+    if (i >= 0) { cliente = capNombre(lineas[i].nombreDicho); lineas = lineas.filter((_, j) => j !== i) }
+  }
+  return { texto: String(texto || '').trim(), lineas, medio, cliente, operacion: op.operacion, vendedor: ve.vendedor }
 }
 
 // ---------- 2) Ingreso de mercadería por voz ----------
@@ -222,3 +267,77 @@ function productoDe(t, productos, corte) {
   const b = buscarProducto(q, productos, { minimo: 0.55 })
   return { dicho: q, producto: b.producto ? { id: b.producto.id, nombre: b.producto.nombre } : null, opciones: b.opciones, duda: b.duda }
 }
+
+// ---------- 5) Centro de voz: comando de inicio + datos ----------
+// "Venta: …", "Ingreso: …", "Cobrar: …", "Consulta: …", "Ir a: …", "Devolución: …", "Agregar a la venta 45: …",
+// y, con una venta abierta: "agregar 2 cintas", "quitar los focos", "cerrar venta", "cancelar".
+// Solo entiende y propone: nada se guarda sin la revisión y el Confirmar de la persona.
+const COMANDOS = [
+  [/^(?:nueva\s+venta|venta|vender)\b/, 'venta'], [/^(?:ingreso|ingresar|entrada)\b/, 'ingreso'], [/^(?:cobrar|cobro|cobra)\b/, 'cobrar'],
+  [/^(?:consulta|consultar|pregunta)\b/, 'consulta'], [/^(?:ir\s+a|ve\s+a|abrir|abre|llevame\s+a)\b/, 'ir'], [/^(?:devolucion|devolver|devuelve)\b/, 'devolucion']
+]
+const numVenta = t => { const m = /\b(?:venta|guia)\s*(?:numero|nro\.?|n)?\s*(?:g\s*0*1\s*-?\s*)?0*(\d{1,6})\b/.exec(t); return m ? Number(m[1]) : null }
+export function entenderComando(texto, productos = [], { usuarios = [], abierta = false } = {}) {
+  const crudo = String(texto || '').trim()
+  const n = numerosATexto(crudo), t = sinTilde(n).replace(/[¿?¡!]/g, ' ').replace(/\s+/g, ' ').trim()
+  if (!t) return { tipo: 'nada', texto: crudo }
+  // Con una venta abierta (aún sin guardar)
+  if (/^(?:cerrar|cierra|termina\w*|confirma\w*|guarda\w*)(?:\s+(?:la\s+)?venta)?\b|^(?:listo|eso es todo)$/.test(t)) return { tipo: 'cerrar', texto: crudo }
+  if (/^(?:cancela\w*|descarta\w*|borra\w* todo)\b/.test(t)) return { tipo: 'cancelar', texto: crudo }
+  // Agregar a una venta YA guardada → venta adicional enlazada
+  let m = /^(?:agrega\w*|añad\w*|anad\w*|suma\w*)\s+a\s+(?:la\s+)?(ultima\s+)?(?:venta|guia)\b\s*(.*)$/.exec(t)
+  if (m) {
+    let resto = m[2], numero = null, de = ''
+    const mn = /^(?:numero|nro\.?|n)?\s*(?:g\s*0*1\s*-?\s*)?0*(\d{1,6})\b\s*[:,]?\s*/.exec(resto); if (!m[1] && mn) { numero = Number(mn[1]); resto = resto.slice(mn[0].length) }
+    const md = /^(?:de|del cliente|de la clienta|de don|de dona)\s+([a-zñ]+(?:\s+(?!\d)[a-zñ]+)?)\s*[:,]?\s*/.exec(resto); if (md) { de = capNombre(md[1]); resto = resto.slice(md[0].length) }
+    resto = resto.replace(/^[:,]\s*/, '')
+    return { tipo: 'adicional', texto: crudo, numero, ultima: !!m[1] || (!numero && !!de), cliente: de, venta: entenderVenta(resto, productos) }
+  }
+  if (/^(?:agrega\w*|añad\w*|anad\w*|suma\w*|pon\w*|tambien)\b/.test(t) && !/^agrega\w* al stock/.test(t)) {
+    const v = entenderVenta(n.replace(/^\s*\S+\s*/, ''), productos)
+    return { tipo: abierta ? 'agregar' : 'venta', texto: crudo, venta: v }
+  }
+  if (/^(?:quita\w*|saca\w*|retira\w*|elimina\w*)\b/.test(t)) {
+    const resto = n.replace(/^\s*\S+\s*/, '').replace(/^(?:los|las|el|la|del|de)\s+/i, '')
+    return { tipo: 'quitar', texto: crudo, lineas: lineasDe(resto, productos) }
+  }
+  let cmd = null, resto = n
+  for (const [re, c] of COMANDOS) { const x = re.exec(t); if (x) { cmd = c; resto = cortarPrefijo(n, x[0]); break } }
+  resto = resto.replace(/^\s*[:,.-]\s*/, '')
+  if (cmd === 'venta') return ventaCmd(crudo, resto, productos, usuarios)
+  if (cmd === 'ingreso') return { tipo: 'ingreso', texto: crudo, ...entenderIngreso(resto, productos) }
+  if (cmd === 'cobrar') {
+    const o = entenderOrden('cobra ' + resto, productos)
+    let cliente = o.cliente
+    if (!cliente && !o.numero) { const c = sinTilde(resto).replace(/\b(?:yape\w*|plin\w*|efectivo|al contado|contado|operacion\s*\d+|\d+|con|en|por|a|al|de|la|el|don|dona|senor|senora|cliente|clienta|venta|deuda|pago|ya)\b/g, ' ').replace(/[^a-zñ\s]/g, ' ').replace(/\s+/g, ' ').trim(); if (c.length >= 2) cliente = c.split(' ').slice(0, 3).join(' ') }
+    return { ...o, cliente, texto: crudo, tipo: 'cobrar' }
+  }
+  if (cmd === 'consulta') { const o = entenderOrden(resto, productos); return o.tipo === 'nada' ? { tipo: 'nada', texto: crudo } : { ...o, texto: crudo } }
+  if (cmd === 'ir') { const o = entenderOrden('ir a ' + resto, productos); return o.tipo === 'ir' ? { ...o, texto: crudo } : { tipo: 'nada', texto: crudo } }
+  if (cmd === 'devolucion' || /\bdevolu\w*|\bdevuelv\w*/.test(t)) return devolucionCmd(crudo, cmd ? resto : n.replace(/^.*?\b(?:devoluci[oó]n|devuelv\w*|devolver)\b\s*(?:de\s+)?[:,]?\s*/i, ''), productos)
+  // Sin comando de inicio: se usa el asistente de siempre
+  const o = entenderOrden(crudo, productos)
+  if (o.tipo === 'venta' || new RegExp(VERBO_VENTA.source, 'i').test(crudo)) return ventaCmd(crudo, n, productos, usuarios)
+  return o
+}
+function cortarPrefijo(n, prefijo) {
+  // quita del texto original tantas palabras como tiene el comando reconocido
+  const k = prefijo.trim().split(/\s+/).length
+  return n.trim().split(/\s+/).slice(k).join(' ')
+}
+function ventaCmd(crudo, resto, productos, usuarios) {
+  const venta = entenderVenta(resto, productos)
+  const u = venta.vendedor ? buscarUsuario(venta.vendedor, usuarios) : null
+  return { tipo: 'venta', texto: crudo, venta, vendedor: venta.vendedor ? { dicho: venta.vendedor, id: u?.id || null, nombre: u?.nombre || '' } : null }
+}
+function devolucionCmd(crudo, resto, productos) {
+  let t = ' ' + resto + ' ', numero = null
+  const mv = /\b(?:de\s+)?(?:la\s+)?(?:venta|gu[ií]a)\s*(?:n[uú]mero|nro\.?|n)?\s*(?:g\s*0*1\s*-?\s*)?0*(\d{1,6})\b/i.exec(t)
+  if (mv) { numero = Number(mv[1]); t = t.slice(0, mv.index) + ' , ' + t.slice(mv.index + mv[0].length) }
+  const cl = sacarCliente(t); t = cl.resto
+  let motivo = ''
+  const mm = /\b(?:motivo|porque|por que)\s*[:,]?\s*([^,.;]+)/i.exec(t)
+  if (mm) { const w = sinTilde(mm[1]); motivo = /defect|mal|falla|malogr|quemad|roto/.test(w) ? 'Defectuoso' : /equivoc|error|otro modelo|no era/.test(w) ? 'Equivocación' : /no (?:lo|la|los|las) quis|no quiso|no le gust/.test(w) ? 'El cliente no lo quiso' : 'Otro'; t = t.replace(mm[0], ' , ') }
+  return { tipo: 'devolucion', texto: crudo, numero, cliente: cl.cliente, motivo, lineas: lineasDe(t, productos) }
+}
+export { numVenta }

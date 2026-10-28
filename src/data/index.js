@@ -8,7 +8,7 @@ export async function ejecutar(accion, sesion, ...args) {
   const db = await repo.cargar()
   const r = accion(db, sesion, ...args)
   await repo.guardar(r.db)
-  const ref = (r.venta || r.envio || r.conteo || r.cierre || r.pago || r.devolucion || r.producto || r.tienda)?.id
+  const ref = (r.venta || r.envio || r.conteo || r.cierre || r.pago || r.devolucion || r.solicitud || r.producto || r.tienda)?.id
   return { ref, vista: vistaPara(r.db, sesion) }
 }
 export async function leer(sesion) { return vistaPara(await repo.cargar(), sesion) }

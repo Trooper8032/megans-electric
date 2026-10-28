@@ -96,7 +96,7 @@ export const cantidadDevuelta = (db, ventaId, productoId) => db.devoluciones.fil
 export const MEDIOS_CON_OPERACION = ['Yape', 'Plin']
 export const pagosDe = v => (v.pagos || [])
 export const pagadoDe = v => r2(pagosDe(v).reduce((s, p) => s + p.monto, 0))
-export const saldoDe = v => r2(Math.max(0, v.total - pagadoDe(v)))
+export const saldoDe = v => r2(Math.max(0, v.total - pagadoDe(v) - (v.rebajaDeuda || 0)))
 export const estadoCobro = v => v.estado !== 'Activa' ? 'Anulada' : saldoDe(v) <= 0 ? 'Cobrado' : pagadoDe(v) > 0 ? 'Parcial' : 'Pendiente'
 export const operacionDuplicada = (db, medio, operacion, exceptoId = null) => !!operacion && db.ventas.some(v => v.estado === 'Activa' && pagosDe(v).some(p => p.id !== exceptoId && p.medio === medio && p.operacion === operacion))
 function nuevoPago(d, u, v, { medio, monto, operacion, foto } = {}, ahora, caja) {
@@ -291,6 +291,77 @@ export function registrarDevolucion(db, sesion, { ventaId, productoId, cantidad,
   if (reingresa) mover(d, { cuando, productoId, tipo: 'devolucion', cantidad: c, quien: u.id, ref: dev.id, motivo })
   v.historial.push({ cuando, quien: u.id, que: `Devolución de ${c} × ${l.nombre} por ${soles(monto)} (${motivo}).` })
   return { db: d, devolucion: dev }
+}
+
+// ---------- Centro de voz: venta adicional y devoluciones con aprobación ----------
+export const ventaPorNumero = (db, n) => db.ventas.find(v => v.numero === Number(n)) || null
+const sinT = s => String(s ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/\b(?:don|dona|sr|sra|senor|senora)\.?\s+/g, '').trim()
+export function ultimaVentaDe(db, cliente) {
+  const q = sinT(cliente); if (!q) return null
+  return db.ventas.filter(v => v.estado === 'Activa' && (sinT(v.cliente) === q || sinT(v.cliente).split(/\s+/).includes(q) || sinT(v.cliente).startsWith(q))).sort((a, b) => b.creadoEn.localeCompare(a.creadoEn) || b.numero - a.numero)[0] || null
+}
+export const adicionalesDe = (db, ventaId) => db.ventas.filter(v => v.adicionalDe === ventaId)
+// Agregar a una venta YA cerrada (por ejemplo, de la mañana): NO se cambia la original. Se crea una venta nueva
+// "adicional de la venta N" con el mismo cliente, que descuenta stock y cobra solo lo nuevo.
+export function crearAdicional(db, sesion, ventaId, datos = {}, ahora = new Date()) {
+  const u = exigir(db, sesion, 'vender'), o = db.ventas.find(v => v.id === ventaId)
+  if (!o) falla('No se encontró esa venta.')
+  if (o.estado !== 'Activa') falla('Esa venta está anulada; registra una venta nueva.')
+  if (u.rol === 'vendedor' && o.vendedorId !== u.id) falla('Solo puedes agregar a tus propias ventas.')
+  const r = crearVenta(db, sesion, { ...datos, cliente: o.cliente, telefono: o.telefono, notas: `Adicional de la venta ${o.id}${datos.notas ? '. ' + datos.notas : ''}` }, ahora)
+  r.venta.adicionalDe = o.id
+  r.venta.historial.push({ cuando: ahoraISO(ahora), quien: u.id, que: `Venta adicional de la venta ${o.id}.` })
+  return r
+}
+// Devolución por voz o a mano: queda PENDIENTE hasta que la administradora la apruebe. Nada se mueve antes.
+const pendienteDev = (d, ventaId, productoId) => (d.solicitudesDev || []).filter(s => s.estado === 'Pendiente' && s.ventaId === ventaId).flatMap(s => s.items).filter(i => i.productoId === productoId).reduce((a, i) => a + i.cantidad, 0)
+export function solicitarDevolucion(db, sesion, { ventaId, items, motivo, nota } = {}, ahora = new Date()) {
+  const u = exigir(db, sesion, 'vender'), d = clon(db), v = d.ventas.find(x => x.id === ventaId)
+  if (!v || v.estado !== 'Activa') falla('Elige una venta activa para la devolución.')
+  if (u.rol === 'vendedor' && v.vendedorId !== u.id) falla('Solo puedes pedir devoluciones de tus propias ventas.')
+  if (!Array.isArray(items) || !items.length) falla('Indica qué productos se devuelven.')
+  if (!MOTIVOS_DEVOLUCION.includes(motivo)) falla('Elige el motivo de la devolución.')
+  const lineas = items.map(it => {
+    const l = v.items.find(x => x.productoId === it.productoId); if (!l) falla('Hay un producto que no está en esa venta.')
+    const c = entero(it.cantidad); if (!c) falla('La cantidad a devolver debe ser un número entero mayor que cero.')
+    const vendidas = v.items.filter(x => x.productoId === it.productoId).reduce((s, x) => s + x.cantidad, 0)
+    if (c > vendidas - cantidadDevuelta(d, v.id, it.productoId) - pendienteDev(d, v.id, it.productoId)) falla(`No puedes devolver más ${l.nombre} de lo que se vendió.`)
+    return { productoId: l.productoId, nombre: l.nombre, cantidad: c, precio: l.precio, monto: r2(c * l.precio) }
+  })
+  d.solicitudesDev = d.solicitudesDev || []
+  const cuando = ahoraISO(ahora)
+  const s = { id: 'SDV-' + pad(sig(d, 'sdv'), 4), estado: 'Pendiente', fecha: fechaISO(ahora), cuando, ventaId: v.id, cliente: v.cliente, vendedorId: v.vendedorId, items: lineas, monto: r2(lineas.reduce((a, l) => a + l.monto, 0)), motivo, nota: textoLimpio(nota, 160), solicitadoPor: u.id, resueltoPor: null, resueltoEn: null }
+  d.solicitudesDev.push(s)
+  v.historial.push({ cuando, quien: u.id, que: `Pidió devolver ${lineas.map(l => `${l.cantidad} × ${l.nombre}`).join(', ')} (${motivo}). Pendiente de aprobación.` })
+  return { db: d, solicitud: s }
+}
+// Solo la administradora. Al aprobar: vuelve al stock (si reingresa) y se ajusta la deuda o la caja.
+// Si la venta aún debe dinero, primero se rebaja la deuda; lo que sobra se devuelve por el medio elegido.
+export function aprobarDevolucion(db, sesion, solicitudId, { medio, reingresa = true } = {}, ahora = new Date()) {
+  const u = exigir(db, sesion, 'devolver')
+  const s0 = (db.solicitudesDev || []).find(x => x.id === solicitudId); if (!s0) falla('No se encontró esa devolución.')
+  if (s0.estado !== 'Pendiente') falla('Esa devolución ya fue resuelta.')
+  let d = clon(db); const ids = []
+  d.solicitudesDev.find(x => x.id === solicitudId).estado = 'Aprobando'
+  for (const it of s0.items) {
+    const v = d.ventas.find(x => x.id === s0.ventaId)
+    const deuda = saldoDe(v), aDeuda = Math.min(deuda, it.monto)
+    const m = aDeuda >= it.monto ? 'Pendiente' : (medio || (pagosDe(v).at(-1)?.medio ?? 'Efectivo'))
+    const r = registrarDevolucion(d, sesion, { ventaId: s0.ventaId, productoId: it.productoId, cantidad: it.cantidad, motivo: s0.motivo, reingresa, medio: m }, ahora)
+    d = r.db; ids.push(r.devolucion.id)
+    if (aDeuda > 0) { const vv = d.ventas.find(x => x.id === s0.ventaId); vv.rebajaDeuda = r2((vv.rebajaDeuda || 0) + aDeuda); vv.estadoCobro = estadoCobro(vv) }
+  }
+  const s = d.solicitudesDev.find(x => x.id === solicitudId)
+  Object.assign(s, { estado: 'Aprobada', resueltoPor: u.id, resueltoEn: ahoraISO(ahora), devoluciones: ids })
+  return { db: d, solicitud: s }
+}
+export function rechazarDevolucion(db, sesion, solicitudId, motivo = '', ahora = new Date()) {
+  const u = exigir(db, sesion, 'devolver'), d = clon(db), s = (d.solicitudesDev || []).find(x => x.id === solicitudId)
+  if (!s) falla('No se encontró esa devolución.')
+  if (s.estado !== 'Pendiente') falla('Esa devolución ya fue resuelta.')
+  Object.assign(s, { estado: 'Rechazada', resueltoPor: u.id, resueltoEn: ahoraISO(ahora), motivoRechazo: textoLimpio(motivo, 160) })
+  d.ventas.find(x => x.id === s.ventaId)?.historial.push({ cuando: ahoraISO(ahora), quien: u.id, que: `Rechazó la devolución ${s.id}.` })
+  return { db: d, solicitud: s }
 }
 
 // ---------- Productos e inventario ----------
@@ -568,6 +639,7 @@ export function vistaPara(db, sesion) {
     productos: db.productos.map(quitarCosto),
     ventas: db.ventas.filter(v => v.vendedorId === u.id).map(v => ({ ...v, items: v.items.map(quitarCosto) })),
     devoluciones: db.devoluciones.filter(x => x.vendedorId === u.id),
+    solicitudesDev: (db.solicitudesDev || []).filter(x => x.vendedorId === u.id),
     movimientos: [], conteos: [], devolucionesTienda: [], bitacora: [],
     tiendas: db.tiendas.filter(t => tids.has(t.id)).map(({ id, nombre, encargado, telefono }) => ({ id, nombre, encargado, telefono })),
     envios, pagosTienda: db.pagosTienda.filter(p => eids.has(p.envioId)),

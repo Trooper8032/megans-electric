@@ -96,7 +96,10 @@ function Detalle({ id }) {
     <div className="pagina">
       <button type="button" className="btn suave chico no-imprimir" onClick={() => ir('ventas')}>Volver a ventas</button>
       <div className="titulo-fila sub-t"><div><h1>Guía {v.id}</h1><p className="sub">{fechaLarga(v.fecha)} · {v.hora} · atendió {vend}{v.registradoPor && v.registradoPor !== v.vendedorId ? ` · registró ${nombreDe(db, v.registradoPor)}` : ''} · estado: {estadoCobro(v)}</p></div>
-        <div><ChipsCobro v={v} /> {v.version > 1 && <Chip tono="calido">Se agregaron productos ({v.version - 1})</Chip>}</div></div>
+        <div><ChipsCobro v={v} /> {v.version > 1 && <Chip tono="calido">Se agregaron productos ({v.version - 1})</Chip>}
+          {v.adicionalDe && <button type="button" className="enlace" onClick={() => ir('ventas', v.adicionalDe)}><Chip tono="azul" icono="archivo">Adicional de la venta {v.adicionalDe}</Chip></button>}
+          {db.ventas.filter(x => x.adicionalDe === v.id).map(x => <button key={x.id} type="button" className="enlace" onClick={() => ir('ventas', x.id)}><Chip tono="azul" icono="archivo">Adicional: {x.id} ({soles(x.total)})</Chip></button>)}
+          {(db.solicitudesDev || []).filter(x => x.ventaId === v.id && x.estado === 'Pendiente').map(x => <Chip key={x.id} tono="ambar" icono="reloj">Devolución {x.id} por aprobar</Chip>)}</div></div>
 
       <article className="guia" aria-label={`Vista de la guía de venta ${v.id}`}>
         <div className="guia-cab"><img src={import.meta.env.BASE_URL + "img/logo-640.png"} alt={config.nombre} width="143" height="48" /><div className="tit"><strong>GUÍA DE VENTA</strong><span>N.º {v.id}</span><small>{fechaLarga(v.fecha)} · {v.hora}</small></div></div>

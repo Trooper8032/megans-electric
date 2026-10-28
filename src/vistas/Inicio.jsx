@@ -7,6 +7,7 @@ import { soles, numero } from '../lib/dinero.js'
 import { fechaISO, fechaLarga } from '../lib/fechas.js'
 import { alertas, ventasPorDia, ventasPorMes, ranking, deudasTiendas, cuadreCaja, stockBajoLista, resumenDia } from '../lib/metricas.js'
 import { calcularCaja, cajaBloqueada } from '../lib/dominio.js'
+import CentroVoz, { DevolucionesPendientes } from '../components/CentroVoz.jsx'
 
 const corto = v => Math.abs(v) >= 1000 ? `${Math.round(v / 100) / 10}k` : String(Math.round(v * 10) / 10)
 export default function Inicio() {
@@ -21,6 +22,8 @@ export default function Inicio() {
     <div className="pagina ancha">
       <h1>Hola, {sesion.nombre}</h1>
       <p className="sub">{fechaLarga(hoy)}. Así va tu negocio hoy.</p>
+      <CentroVoz />
+      <DevolucionesPendientes />
       <NuevaVentaHero ir={ir} bloqueada={cajaBloqueada(db, hoy, sesion.id)} />
       {d.al.length > 0 && <ul className="alertas" aria-label="Alertas">{d.al.map((a, i) => <li key={i} className={`alerta ${a.tono}`}><Icono n="alerta" />{a.texto}<button type="button" className="btn suave chico" onClick={() => ir(a.ruta)}>Ver</button></li>)}</ul>}
       <div className="kpis">
@@ -54,6 +57,7 @@ function InicioVendedor({ db, sesion, hoy, ir }) {
     <div className="pagina">
       <h1>Hola, {sesion.nombre}</h1>
       <p className="sub">{fechaLarga(hoy)}</p>
+      <CentroVoz />
       <NuevaVentaHero ir={ir} bloqueada={cajaBloqueada(db, hoy, sesion.id)} />
       <div className="kpis"><Kpi icono="billete" etiqueta="Vendiste hoy" valor={soles(res.total)} sub={`${res.cantidad} venta(s)`} /><Kpi icono="reloj" etiqueta="Pendientes por cobrar" valor={soles(caja.pendientes.monto)} tono={caja.pendientes.cantidad ? 'ambar' : ''} sub={`${caja.pendientes.cantidad} venta(s)`} /></div>
       <div className="acciones-col">
