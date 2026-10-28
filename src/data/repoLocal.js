@@ -15,7 +15,15 @@ export const repoLocal = {
     const t = leerTexto()
     if (cache && t === ultimo) return cache
     let db = null
-    try { if (t) db = migrar(JSON.parse(t)); if (db && validarCopia(db)) db = null } catch { db = null }
+    // NUNCA se reemplazan datos guardados por la demostración. Antes, si la validación encontraba algo raro
+    // (p. ej. stock con decimales en productos por metro), se borraba todo y se cargaba la demo.
+    if (t) {
+      try { db = migrar(JSON.parse(t)) } catch { db = null }
+      const problema = db ? validarCopia(db) : 'No se pudo leer'
+      if (problema) { try { const k = K('rescate'); if (!almacen().getItem(k)) almacen().setItem(k, t) } catch { /* sin espacio */ } console.warn('Datos guardados con observaciones (se conservan):', problema) }
+      if (!db) throw new ErrorApp('No se pudieron leer los datos guardados en este equipo. Se guardó una copia de rescate; no se borró nada.')
+      cache = db; ultimo = t; return db
+    }
     if (!db) { db = await crearDemo(new Date()); await this.guardar(db); return db }
     cache = db; ultimo = t; return db
   },

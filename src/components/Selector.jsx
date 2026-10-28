@@ -1,23 +1,33 @@
 // Selector de productos con carrito (venta, agregar a una venta y envío a tienda). Letra grande, pocas opciones.
 // Flujo rápido: 1) escribe y elige del desplegable (filtra mientras escribes)  2) ajusta la cantidad  3) Cobrar.
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import Foto from './Foto.jsx'
 import Escaner from './Escaner.jsx'
 import { Icono } from './Iconos.jsx'
 import { Campo } from './ui.jsx'
 import { soles } from '../lib/dinero.js'
 import { ID_OTROS } from '../lib/dominio.js'
+import { raiz } from '../lib/voz.js'
 
 // Precio de una línea del carrito: el editado (descuento de mostrador) o el de lista.
 export const precioLinea = (i, productos) => i.productoId === ID_OTROS ? Number(i.precio) || 0 : (i.precio !== undefined && i.precio !== '' && Number(String(i.precio).replace(',', '.')) > 0 ? Number(String(i.precio).replace(',', '.')) : (productos.find(p => p.id === i.productoId)?.precio || 0))
 export const totalCarro = (items, productos) => Math.round(items.reduce((s, i) => s + i.cantidad * precioLinea(i, productos), 0) * 100) / 100
+// Búsqueda por palabras, en cualquier orden, sin tildes ni plurales: «caja 8 polos» encuentra «Caja de 8 polos».
+const IGNORAR = new Set(['de', 'del', 'la', 'el', 'los', 'las', 'con', 'para', 'y', 'x'])
+export const palabras = t => normalizar(t).replace(/[^a-z0-9ñ.\/ ]+/g, ' ').split(/\s+/).filter(w => w && !IGNORAR.has(w)).map(raiz)
+export function coincide(q, p) {
+  const qs = palabras(q); if (!qs.length) return true
+  const ws = palabras(`${p.nombre} ${p.categoria} ${p.codigo || ''}`), cod = normalizar(p.codigo || '')
+  if (cod && normalizar(q.trim()) === cod) return true
+  return qs.every(x => ws.some(w => /^\d/.test(x) ? w === x : w.startsWith(x)))
+}
 export const normalizar = t => String(t || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
 
 export default function Selector({ productos, items, onCambio, permitirOtros = true, titulo = 'Productos', editarPrecio = false, fotoLinea = false, rapidos = [], favoritos = null, onFavorito = null, children = null, clase = '' }) {
-  const [q, setQ] = useState(''), [cat, setCat] = useState('Todas'), [otro, setOtro] = useState({ detalle: '', precio: '', cantidad: '1' }), [errO, setErrO] = useState(''), [camara, setCamara] = useState(false), [leido, setLeido] = useState(''), [abierto, setAbierto] = useState(false), [act, setAct] = useState(0), caja = useRef(null)
+  const [q, setQ] = useState(''), [cat, setCat] = useState('Todas'), [otro, setOtro] = useState({ detalle: '', precio: '', cantidad: '1' }), [errO, setErrO] = useState(''), [camara, setCamara] = useState(false), [leido, setLeido] = useState('')
   const cats = useMemo(() => ['Todas', ...[...new Set(productos.filter(p => p.id !== ID_OTROS).map(p => p.categoria))]], [productos])
   const nq = normalizar(q.trim())
-  const lista = productos.filter(p => p.activo !== false && p.id !== ID_OTROS && (cat === 'Todas' || p.categoria === cat) && (!nq || normalizar(`${p.nombre} ${p.categoria} ${p.codigo || ''}`).includes(nq)))
+  const lista = productos.filter(p => p.activo !== false && p.id !== ID_OTROS && (cat === 'Todas' || p.categoria === cat) && coincide(q, p))
   const enCarro = id => items.filter(i => i.productoId === id).reduce((s, i) => s + i.cantidad, 0)
   const idxDe = id => items.findIndex(i => i.productoId === id)
   const agregar = p => { const ex = items.find(i => i.productoId === p.id); if (ex) onCambio(items.map(i => i === ex ? { ...i, cantidad: i.cantidad + 1 } : i)); else onCambio([...items, { productoId: p.id, cantidad: 1 }]) }
@@ -44,31 +54,38 @@ export default function Selector({ productos, items, onCambio, permitirOtros = t
     agregar(p); setLeido(`Agregado: ${p.nombre}.`); setQ(''); return true
   }
   const rap = rapidos.map(id => productos.find(p => p.id === id)).filter(p => p && p.activo !== false && p.id !== ID_OTROS && (cat === 'Todas' || p.categoria === cat))
-  // Sin texto: solo favoritos y más vendidos. Con texto: hasta 8 coincidencias.
-  const opciones = (nq ? lista : (rap.length ? rap : lista)).slice(0, 8)
-  useEffect(() => { setAct(0) }, [q, cat])
-  useEffect(() => { const fuera = e => { if (caja.current && !caja.current.contains(e.target)) setAbierto(false) }; document.addEventListener('pointerdown', fuera); return () => document.removeEventListener('pointerdown', fuera) }, [])
-  const elegir = p => { if (!p || !disponible(p)) return; agregar(p); setLeido(`Agregado: ${p.nombre}.`); setQ(''); setAbierto(false) }
+  // Lista siempre visible (no se cierra ni se borra al tocar). Sin texto: favoritos y más vendidos primero.
+  const [ver, setVer] = useState(12), [ultimo, setUltimo] = useState(null)
+  const visibles = nq ? lista : [...rap, ...lista.filter(p => !rap.includes(p))]
+  const opciones = visibles.slice(0, ver)
+  useEffect(() => { setVer(12) }, [q, cat])
+  const elegir = p => { if (!p || !disponible(p)) return; agregar(p); setLeido(`Agregado: ${p.nombre}.`); setUltimo(p.id) }
+  const sumarUno = p => { const i = idxDe(p.id); if (i < 0) return elegir(p); if (disponible(p)) poner(i, items[i].cantidad + 1) }
+  const restarUno = p => { const i = idxDe(p.id); if (i < 0) return; if (items[i].cantidad > 1) poner(i, items[i].cantidad - 1); else quitar(i) }
   const alTecla = e => {
-    if (e.key === 'ArrowDown') { e.preventDefault(); setAbierto(true); setAct(a => Math.min(a + 1, opciones.length - 1)) }
-    else if (e.key === 'ArrowUp') { e.preventDefault(); setAct(a => Math.max(a - 1, 0)) }
-    else if (e.key === 'Escape') setAbierto(false)
-    else if (e.key === 'Enter' && q.trim()) { e.preventDefault(); const c = q.trim(); if (/^[A-Za-z]{0,4}\d{3,}$/.test(c) && productos.some(x => String(x.codigo || '').toUpperCase() === c.toUpperCase())) porCodigo(c); else if (abierto && opciones[act]) elegir(opciones[act]); else if (/^[A-Za-z]{0,4}\d{3,}$/.test(c)) porCodigo(c) }
+    if (e.key === 'Enter' && q.trim()) { e.preventDefault(); const c = q.trim(); if (/^[A-Za-z]{0,4}\d{3,}$/.test(c) && porCodigo(c)) return; if (opciones.length === 1) elegir(opciones[0]) }
   }
   const idLista = `lista-${titulo.replace(/\W+/g, '')}`
   return (
     <div className={`pos ${clase}`}>
-      <section aria-label={`Elegir ${titulo.toLowerCase()}`}>
-        <div className="buscador-fila"><div className="combo" ref={caja}><div className="buscador"><Icono n="buscar" /><input type="search" role="combobox" aria-expanded={abierto && opciones.length > 0} aria-controls={idLista} aria-autocomplete="list" aria-activedescendant={abierto && opciones[act] ? `${idLista}-${opciones[act].id}` : undefined} aria-label="Buscar producto por nombre" placeholder="Escribe el producto o escanea el código…" value={q} onFocus={() => setAbierto(true)} onChange={e => { setQ(e.target.value); setLeido(''); setAbierto(true) }} onKeyDown={alTecla} /></div>
-          {abierto && <ul className="combo-lista" id={idLista} role="listbox" aria-label={nq ? 'Productos que coinciden' : 'Favoritos y más vendidos'}>
-            {!nq && <li className="combo-t" role="presentation">{rap.length ? 'Favoritos y más vendidos' : 'Productos'}</li>}
-            {!opciones.length ? <li className="combo-vacio" role="presentation">No hay productos con ese nombre{permitirOtros ? '. Usa “Otros”' : ''}.</li> : opciones.map((p, i) => { const quedan = p.stock - enCarro(p.id), ok = disponible(p)
-              return <li key={p.id} id={`${idLista}-${p.id}`} role="option" aria-selected={i === act} aria-disabled={!ok} className={`combo-op ${i === act ? 'on' : ''} ${ok ? '' : 'off'}`} onPointerEnter={() => setAct(i)} onPointerDown={e => { e.preventDefault(); elegir(p) }}>
-                {favoritos?.includes(p.id) && <Icono n="estrella" tam={14} />}<span className="combo-nom">{p.nombre}<small>{p.categoria}</small></span><span className="combo-pre">{p.precio > 0 ? soles(p.precio) : 'Sin precio'}</span><span className={`combo-st ${p.stock <= p.minimo ? 'rojo-t' : ''}`}>{quedan > 0 ? `Stock ${quedan}` : 'Sin stock'}</span></li> })}
-            {nq && lista.length > 8 && <li className="combo-vacio" role="presentation">Hay {lista.length - 8} más. Sigue escribiendo para afinar.</li>}
-          </ul>}</div>
-          <select className="cat-sel" aria-label="Filtrar por categoría" value={cat} onChange={e => setCat(e.target.value)}>{cats.map(c => <option key={c} value={c}>{c === 'Todas' ? 'Todas las categorías' : c}</option>)}</select>
+      <section aria-label={`Elegir ${titulo.toLowerCase()}`} className="sel">
+        <div className="buscador-fila"><div className="buscador"><Icono n="buscar" /><input type="search" aria-controls={idLista} aria-label="Buscar producto por nombre o código" placeholder="Buscar: caja 8 polos, interruptor…" value={q} onChange={e => setQ(e.target.value)} onKeyDown={alTecla} autoComplete="off" enterKeyHint="search" />{q && <button type="button" className="icono-btn limpiar" aria-label="Borrar búsqueda" onClick={() => setQ('')}>×</button>}</div>
           <button type="button" className="btn suave escanear" onClick={() => setCamara(c => !c)} aria-expanded={camara} aria-label={camara ? 'Cerrar cámara' : 'Escanear código con la cámara'}><Icono n="escaner" /><span className="solo-ancho">{camara ? 'Cerrar' : 'Escanear'}</span></button></div>
+        <div className="sel-cats" role="group" aria-label="Filtrar por categoría">{cats.map(c => <button key={c} type="button" aria-pressed={cat === c} className={`cat ${cat === c ? 'on' : ''}`} onClick={() => setCat(c)}>{c}</button>)}</div>
+        <ul className="sel-lista" id={idLista} aria-label={nq ? 'Productos que coinciden' : 'Productos'}>
+          {!nq && rap.length > 0 && <li className="sel-t">Favoritos y más vendidos primero</li>}
+          {!opciones.length && <li className="combo-vacio">No hay productos con «{q}»{permitirOtros ? '. Prueba otra palabra o usa “Otros”' : ''}.</li>}
+          {opciones.map(p => { const en = enCarro(p.id), quedan = p.stock - en, ok = disponible(p)
+            return <li key={p.id} className={`sel-fila ${en ? 'en' : ''} ${ok || en ? '' : 'off'} ${ultimo === p.id ? 'recien' : ''}`}>
+              <button type="button" className="sel-prod" disabled={!ok && !en} onClick={() => sumarUno(p)} aria-label={`${p.nombre}, ${p.precio > 0 ? soles(p.precio) : 'sin precio'}, ${quedan > 0 ? `quedan ${quedan}` : 'sin stock'}. Tocar para agregar`}>
+                <span className="sel-nom">{favoritos?.includes(p.id) && <Icono n="estrella" tam={13} />}{p.nombre}<small>{p.categoria}{p.codigo ? ` · ${p.codigo}` : ''}</small></span>
+                <span className="sel-pre">{p.precio > 0 ? soles(p.precio) : 'Sin precio'}<small className={p.stock <= p.minimo ? 'rojo-t' : ''}>{quedan > 0 ? `Stock ${quedan}` : 'Sin stock'}</small></span>
+              </button>
+              {en > 0 ? <span className="sel-cant" aria-label={`${en} en la venta`}><button type="button" aria-label={`Quitar uno de ${p.nombre}`} onClick={() => restarUno(p)}><Icono n="menos" tam={16} /></button><b>{en}</b><button type="button" aria-label={`Agregar uno de ${p.nombre}`} disabled={!ok} onClick={() => sumarUno(p)}><Icono n="mas" tam={16} /></button></span>
+                : <button type="button" className="sel-mas" disabled={!ok} aria-label={`Agregar ${p.nombre}`} onClick={() => sumarUno(p)}><Icono n="mas" tam={18} /></button>}
+            </li> })}
+          {visibles.length > ver && <li><button type="button" className="btn suave chico sel-vermas" onClick={() => setVer(v => v + 20)}>Ver {Math.min(20, visibles.length - ver)} más de {visibles.length - ver}</button></li>}
+        </ul>
         {camara && <Escaner onCodigo={t => { porCodigo(t); setCamara(false) }} onCerrar={() => setCamara(false)} />}
         {leido && <p className="sub-t" role="status">{leido}</p>}
         {permitirOtros && productos.some(p => p.id === ID_OTROS) && (

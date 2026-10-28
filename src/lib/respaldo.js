@@ -21,7 +21,7 @@ export function validarCopia(d) {
   if (d.devoluciones.some(x => !vs.has(x.ventaId))) return 'Hay devoluciones de ventas inexistentes.'
   if (d.envios.some(e => !ts.has(e.tiendaId)) || d.pagosTienda.some(p => !ts.has(p.tiendaId)) || d.devolucionesTienda.some(x => !ts.has(x.tiendaId))) return 'Hay movimientos de una tienda inexistente.'
   if (d.movimientos.some(m => !ps.has(m.productoId))) return 'Hay movimientos de stock de productos inexistentes.'
-  if (d.productos.some(p => !Number.isInteger(p.stock) || p.stock < 0)) return 'Hay productos con stock no válido.'
+  if (d.productos.some(p => !Number.isFinite(p.stock) || p.stock < -1e-9 || (!p.decimales && !Number.isInteger(p.stock)))) return 'Hay productos con stock no válido.'
   return null
 }
 export const crearRespaldo = (db, ahora = new Date()) => ({ app: 'megans-v2', version: VERSION_DATOS, fecha: ahora.toISOString(), datos: db })
