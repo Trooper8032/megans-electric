@@ -1,5 +1,5 @@
 // Service worker: guarda la aplicación para abrirla sin conexión (los datos viven en el navegador).
-const V = 'megans-v2-4', VIA = 'megans-ia-motor-1'
+const V = 'megans-v2-5', VIA = 'megans-ia-motor-1'
 const R = self.registration.scope; const P = new URL(R).pathname
 const BASE = [R, R+'manifest.webmanifest', R+'icon-192.png', R+'img/logo-640.png']
 self.addEventListener('install', e => { e.waitUntil(caches.open(V).then(c => c.addAll(BASE)).then(() => self.skipWaiting())) })
