@@ -365,3 +365,4 @@ h1{font-size:clamp(1.35rem,4.6vw,1.75rem)}h2{font-size:1.1rem}h3{font-size:1rem}
 .sel-cant{flex:none;display:inline-flex;align-items:center;gap:.25rem;background:var(--card);border:1.5px solid var(--pri);border-radius:12px;padding:2px}
 .sel-cant button{width:34px;height:34px;border:0;border-radius:9px;background:var(--pri-l);color:var(--pri);display:grid;place-items:center;cursor:pointer}.sel-cant b{min-width:1.6rem;text-align:center}
 .sel-vermas{width:100%;border-radius:0;border:0;border-top:1px solid var(--linea)}
+.opcion-voz{display:flex;gap:.6rem;align-items:flex-start;padding:.6rem .8rem;border:1.5px solid var(--linea);border-radius:12px;cursor:pointer}.opcion-voz.on{border-color:var(--pri);background:var(--pri-l)}.opcion-voz span{display:flex;flex-direction:column}.opcion-voz input{margin-top:.25rem;width:20px;height:20px}

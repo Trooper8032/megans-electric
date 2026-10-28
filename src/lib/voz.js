@@ -9,14 +9,17 @@ export const sinTilde = s => String(s ?? '').normalize('NFD').replace(/[\u0300-\
 const NUM = { cero: 0, un: 1, uno: 1, una: 1, dos: 2, tres: 3, cuatro: 4, cinco: 5, seis: 6, siete: 7, ocho: 8, nueve: 9, diez: 10, once: 11, doce: 12, trece: 13, catorce: 14, quince: 15, dieciseis: 16, diecisiete: 17, dieciocho: 18, diecinueve: 19, veinte: 20, veintiun: 21, veintiuno: 21, veintiuna: 21, veintidos: 22, veintitres: 23, veinticuatro: 24, veinticinco: 25, veintiseis: 26, veintisiete: 27, veintiocho: 28, veintinueve: 29, treinta: 30, cuarenta: 40, cincuenta: 50, sesenta: 60, setenta: 70, ochenta: 80, noventa: 90, cien: 100, ciento: 100, doscientos: 200, doscientas: 200, trescientos: 300, trescientas: 300, cuatrocientos: 400, cuatrocientas: 400, quinientos: 500, quinientas: 500, seiscientos: 600, seiscientas: 600, setecientos: 700, setecientas: 700, ochocientos: 800, ochocientas: 800, novecientos: 900, novecientas: 900, mil: 1000 }
 // Errores típicos de Whisper al oír frases de tienda (medidos con audios de prueba). Solo corrige palabras sueltas muy específicas.
 const OIDO = [
+  [/\bpor\s+los\b/gi, 'polos'], [/\by\s+d'?une?\b/gi, 'y un'], [/\b(?:o\s+al|o\s+el|huele)\s+(?=l?oza\b)/gi, 'wall '], [/\bwall\s+oza\b/gi, 'wall loza'], [/\b(?:lin|pin)\b(?=\s*[.,])/gi, ' plin '],
+  [/\b(?:wal|gual|ual)\b/gi, 'wall'], [/\bwall\s+losa\b/gi, 'wall loza'], [/\bja?p[eé]\b/gi, ' yape '], [/\bya\s+pre\b/gi, ' yape '], [/\b(?:lin|pin)\b(?=\s*[.,]?\s*$)/gi, ' plin '],
   [/\b(?:ya|y\s*a)\s*(?:pe|p|ve|be|per?)\b'?|\bjp\b|\bdi?ope\b|\byapé\b/gi, ' yape '],
   [/\b(?:a|lo?s\s+a)?plink?\b/gi, ' plin '],
-  [/\b(?:qui[dlr]+ente|[kq]u?ilente|quillente|tienta|clente|cliendte)\b/gi, ' cliente '], [/\byap\b/gi, ' yape '], [/\bper\s*cliente\b|\bpercliente\b/gi, ' yape cliente '],
+  [/\b(?:qui[dlr]+ente|[kq]u?ilente|quill?ante|quillente|tienta|tiente|[qk]uiente|fiente|clente|cliendte|clidenta)\b/gi, ' cliente '], [/\bcliente(?=[a-záéíóú]{3,}\b)/gi, 'cliente '], [/\bclientes de\b/gi, 'cliente'], [/\byap\b/gi, ' yape '], [/\bper\s*cliente\b|\bpercliente\b/gi, ' yape cliente '],
   [/\binefectivo\b/gi, 'en efectivo'], [/,?\s*(?:él\s+)?\bapag[oó](?![a-z])/gi, ' ya pagó'], [/\bme\s*deben\b|\bmedeben\b|\bmi deben\b/gi, 'me deben'],
   [/\btienes\s+me deben\b/gi, 'quienes me deben'], [/\bdebes la tienda\b/gi, 'debe la tienda'], [/\bhabre\b/gi, 'abre'], [/\banuna\b/gi, 'anula'],
   [/\bmaca como\b/gi, 'marca como'], [/\bcobra da\b/gi, 'cobrada'], [/\ben\s+chuf\w*/gi, ' enchufe'], [/\bdosenchufe/gi, 'dos enchufe'],
   [/\b(\d+)\.(?=\s+[a-záéíóúñ])/gi, '$1'],
 ]
+const INICIO_VENTA = /^\s*(?:benta|denta|venda|vente|ben ?de|20(?=\s*[.,:]|\s+\d))\s*[.,:-]?\s*/i
 export const corregirOido = t => OIDO.reduce((a, [re, r]) => a.replace(re, r), String(t ?? '')).replace(/[ \t]+/g, ' ')
 export function numerosATexto(t) {
   t = corregirOido(t)
@@ -152,7 +155,7 @@ function lineasDe(texto, productos, { precios = false } = {}) {
     let b = buscarProducto(resto, productos)
     // Cantidad dicha DESPUÉS del producto ("focos led 3", "interruptor 2"): solo si el número no es parte del nombre ("cable 14").
     const fin = !dicha && /^(.*?[a-zñáéíóú.])\s+(\d+(?:[.,]\d+)?)$/i.exec(resto)
-    if (fin && !/(?:\bpolos?|\bx|\bpor|\bn[uú]mero|\bnro\.?|\bde)$/i.test(fin[1])) {
+    if (fin && !/(?:\bx|\bpor|\bn[uú]mero|\bnro\.?|\bde)$/i.test(fin[1])) {
       const r2 = cantidadInicial(fin[1]), b2 = buscarProducto(r2.resto, productos)
       if (b2.puntaje >= b.puntaje - 0.02) { cantidad = Number(fin[2].replace(',', '.')); dicha = true; resto = r2.resto; b = b2 }
     }
@@ -196,12 +199,14 @@ export function buscarUsuario(nombre, usuarios = []) {
 }
 export function entenderVenta(texto, productos) {
   let t = numerosATexto(' ' + String(texto || '').replace(/\s+/g, ' ') + ' ')
+  t = t.replace(INICIO_VENTA, ' ').replace(/(^|[\s,.])(\d+(?:[.,]\d+)?)\s*,\s+(?=\p{L})/gu, '$1$2 ')
+  const medio0 = medioDe(t)
   const ve = sacarVendedor(t); t = ve.resto
   let cl = sacarCliente(t); t = cl.resto
   if (!cl.cliente) { cl = sacarClienteLibre(t, productos); t = cl.resto }
   t = t.replace(VERBO_VENTA, ' , ')
   const op = sacarOperacion(t); t = op.resto
-  const medio = medioDe(t)
+  const medio = medioDe(t) || medio0
   t = t.replace(/\b(?:(?:y\s+)?(?:paga|pago|pagó|pagaron|pagando|pagará|cancela|cancelo|canceló)(?:\s+(?:con|en|por|al))?)\b/gi, ' , ').replace(MEDIO_RE, ' , ').replace(/\b(?:con|en|por)\s*(?=,)/gi, ' ')
   let lineas = lineasDe(t, productos, { precios: true }), cliente = cl.cliente
   // Un nombre suelto entre comas ("…, Juan, …") que no se parece a ningún producto es el cliente.
@@ -273,7 +278,7 @@ function productoDe(t, productos, corte) {
 // y, con una venta abierta: "agregar 2 cintas", "quitar los focos", "cerrar venta", "cancelar".
 // Solo entiende y propone: nada se guarda sin la revisión y el Confirmar de la persona.
 const COMANDOS = [
-  [/^(?:nueva\s+venta|venta|vender)\b/, 'venta'], [/^(?:ingreso|ingresar|entrada)\b/, 'ingreso'], [/^(?:cobrar|cobro|cobra)\b/, 'cobrar'],
+  [/^(?:nueva\s+venta|venta|vender|benta|denta|venda|vente|20(?=\s*[.,:]|\s+\d))\b/, 'venta'], [/^(?:ingreso|ingresar|entrada)\b/, 'ingreso'], [/^(?:cobrar|cobro|cobra)\b/, 'cobrar'],
   [/^(?:consulta|consultar|pregunta)\b/, 'consulta'], [/^(?:ir\s+a|ve\s+a|abrir|abre|llevame\s+a)\b/, 'ir'], [/^(?:devolucion|devolver|devuelve)\b/, 'devolucion']
 ]
 const numVenta = t => { const m = /\b(?:venta|guia)\s*(?:numero|nro\.?|n)?\s*(?:g\s*0*1\s*-?\s*)?0*(\d{1,6})\b/.exec(t); return m ? Number(m[1]) : null }

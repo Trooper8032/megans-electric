@@ -139,3 +139,17 @@ describe('errores de oído de Whisper small', async () => {
     expect(entenderVenta('Dos cables número 12 y un tomacorriente doble, YAP, Kilente Juan.', P)).toMatchObject({ medio: 'Yape', cliente: 'Juan' })
   })
 })
+
+describe('nombres reales del catálogo dictados (errores típicos de Whisper)', async () => {
+  const db = await demo(), P = db.productos
+  const V = t => { const o = entenderComando(t, P); return [o.venta.lineas.map(l => [l.cantidad, l.nombre]), o.venta.medio, o.venta.cliente] }
+  it('cantidad después de «8 polos», cliente mal oído, «Venta» mal oída', () => {
+    expect(V('Venta: cajas de ocho polos tres, cliente Juan, efectivo')).toEqual([[[3, 'Caja de 8 polos']], 'Efectivo', 'Juan'])
+    expect(V('venta tres cajas de ocho polos tiente Juan efectivo.')).toEqual([[[3, 'Caja de 8 polos']], 'Efectivo', 'Juan'])
+    expect(V('20. Una caja de 18 polos y 2 cajas de 12 polos. Lin, cliente pedro.')).toEqual([[[1, 'Caja de 18 polos'], [2, 'Caja de 12 polos']], 'Plin', 'Pedro'])
+    expect(V('Venta, cinco, interruptores dobles, tres enchufe reversibles, cliente Carlos Pendiente.')).toEqual([[[5, 'Interruptor doble'], [3, 'Enchufe reversible']], 'Pendiente', 'Carlos'])
+    expect(V('Venta un Tomacorriente Triple Empotrado, cliente Ana Yape.')).toEqual([[[1, 'Toma corriente triple empotrado']], 'Yape', 'Ana'])
+    expect(V("Venta, 2 sockets mini-wall y d'un enchufe modelo calavera, cliente Raúl, yape.")[0]).toEqual([[2, 'Socket Mini wall'], [1, 'Enchufe modelo calavera']])
+    expect(V('vendí cuatro soquets o al loza a Rosa en efectivo')).toEqual([[[4, 'Socket Wall loza']], 'Efectivo', 'Rosa'])
+  })
+})

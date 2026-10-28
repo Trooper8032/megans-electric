@@ -19,7 +19,7 @@ for (const f of readdirSync(core).filter(f => /^tesseract-core.*-lstm\.wasm\.js$
 const HF = 'https://huggingface.co'
 const MODELOS = [
   ...['config.json', 'generation_config.json', 'preprocessor_config.json', 'tokenizer.json', 'tokenizer_config.json', 'special_tokens_map.json', 'added_tokens.json', 'normalizer.json', 'vocab.json', 'merges.txt',
-    'onnx/encoder_model_quantized.onnx', 'onnx/decoder_model_merged_quantized.onnx'].map(f => [`${HF}/onnx-community/whisper-small/resolve/main/${f}`, `modelos/onnx-community/whisper-small/${f}`]),
+    'onnx/encoder_model_quantized.onnx', 'onnx/decoder_model_merged_quantized.onnx'].flatMap(f => ['whisper-base', 'whisper-small'].map(m => [`${HF}/onnx-community/${m}/resolve/main/${f}`, `modelos/onnx-community/${m}/${f}`])),
   [`${HF}/BritishWerewolf/U-2-Netp/resolve/main/onnx/model.onnx`, 'modelos/u2netp/model.onnx'],
   ['https://cdn.jsdelivr.net/npm/@tesseract.js-data/spa@1.0.0/4.0.0_best_int/spa.traineddata.gz', 'tesseract/lang/spa.traineddata.gz']
 ]

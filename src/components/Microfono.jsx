@@ -2,6 +2,7 @@
 import { useEffect, useId, useRef, useState } from 'react'
 import { Icono } from './Iconos.jsx'
 import { transcribir } from '../ia/motor.js'
+import { usaNativo, ReconocimientoNativo } from '../ia/preferencias.js'
 
 export function Progreso({ estado }) {
   if (!estado) return null
@@ -9,7 +10,7 @@ export function Progreso({ estado }) {
 }
 export default function Microfono({ etiqueta = 'Hablar', ejemplo, onTexto, onEmpezar, ocupado = false, clase = '' }) {
   const id = useId(), [grab, setGrab] = useState(false), [seg, setSeg] = useState(0), [estado, setEstado] = useState(null), [err, setErr] = useState(''), [escribir, setEscribir] = useState(false), [txt, setTxt] = useState(''), [trabajando, setTrabajando] = useState(false)
-  const rec = useRef(null), iv = useRef(null), sub = useRef(null)
+  const rec = useRef(null), iv = useRef(null), sub = useRef(null), nat = useRef(null), [parcial, setParcial] = useState('')
   useEffect(() => () => { clearInterval(iv.current); try { rec.current?.stop() } catch { /* nada */ } }, [])
   const procesar = async blob => {
     setErr(''); setTrabajando(true); onEmpezar?.()
@@ -17,8 +18,24 @@ export default function Microfono({ etiqueta = 'Hablar', ejemplo, onTexto, onEmp
     catch (e) { console.error(e); setEstado(null); setErr('No pudimos escuchar el audio. Inténtalo otra vez o escríbelo.') }
     setTrabajando(false)
   }
+  // Dictado propio del celular (Web Speech API): rápido y preciso. Si falla o no hay permiso, se usa la grabación + Whisper.
+  const nativo = () => {
+    const SR = ReconocimientoNativo(); if (!SR) return false
+    const r = new SR(); nat.current = r; let final = '', fallo = false
+    r.lang = 'es-PE'; r.interimResults = true; r.continuous = false; r.maxAlternatives = 1
+    r.onresult = e => { let t = ''; for (const x of e.results) t += x[0].transcript; setParcial(t); final = t }
+    r.onerror = e => { fallo = ['not-allowed', 'service-not-allowed', 'audio-capture', 'network', 'language-not-supported'].includes(e.error); if (e.error === 'no-speech') setErr('No escuchamos nada. Toca y habla más cerca del celular.') }
+    r.onend = () => { clearInterval(iv.current); setGrab(false); nat.current = null; const t = (final || '').trim(); setParcial(''); if (t) { onEmpezar?.(); onTexto(t, { voz: true, nativo: true }) } else if (fallo) { setErr(''); grabar() } }
+    try { r.start() } catch { nat.current = null; return false }
+    setGrab(true); setSeg(0); setErr(''); let n = 0; iv.current = setInterval(() => { n++; setSeg(n); if (n >= 20) r.stop() }, 1000)
+    return true
+  }
   const tocar = async () => {
-    if (grab) { rec.current?.stop(); return }
+    if (grab) { if (nat.current) nat.current.stop(); else rec.current?.stop(); return }
+    if (usaNativo() && nativo()) return
+    grabar()
+  }
+  const grabar = async () => {
     if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) { setErr('Este navegador no permite grabar aquí. Sube un audio o escríbelo.'); return }
     let s; try { s = await navigator.mediaDevices.getUserMedia({ audio: true }) } catch { setErr('Necesitamos permiso para usar el micrófono. Revisa los permisos del navegador.'); return }
     const partes = [], r = new MediaRecorder(s); rec.current = r
@@ -37,6 +54,7 @@ export default function Microfono({ etiqueta = 'Hablar', ejemplo, onTexto, onEmp
       {ejemplo && <p className="ia-ejemplo" id={id}><Icono n="foco" tam={16} />{ejemplo}</p>}
       <input ref={sub} className="oculto-input" type="file" accept="audio/*" tabIndex={-1} aria-hidden="true" data-prueba="subir-audio" onChange={e => { const f = e.target.files?.[0]; e.target.value = ''; if (f) procesar(f) }} />
       {escribir && <form className="ia-escribir" onSubmit={e => { e.preventDefault(); if (txt.trim()) { onTexto(txt.trim(), { voz: false }); setTxt('') } }}><label className="oculto" htmlFor={`${id}-t`}>Escribe lo que dirías</label><input id={`${id}-t`} value={txt} maxLength={300} onChange={e => setTxt(e.target.value)} placeholder="Escribe lo que dirías…" /><button type="submit" className="btn suave">Listo</button></form>}
+      {parcial && <p className="ia-ejemplo" aria-live="polite">«{parcial}»</p>}
       <Progreso estado={estado} />
       {err && <p className="error" role="alert">{err}</p>}
     </div>

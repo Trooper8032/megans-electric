@@ -1,11 +1,12 @@
 // Motor de IA en el navegador. Cada herramienta se descarga SOLO cuando se usa por primera vez (carga diferida)
 // y después queda en el equipo. Nada sale del celular o la computadora: audios y fotos no se suben a ningún lado.
 import { IA } from './config.js'
+import { motorVoz } from './preferencias.js'
 export const medidas = {}
 const MB = b => (b / 1048576).toFixed(b > 1e7 ? 0 : 1).replace('.', ',') + ' MB'
 
 // ---------- Voz (Whisper) ----------
-let WW = null, WN = 0, listoVoz = false; const WP = {}
+let WW = null, WN = 0, listoVoz = false, WM = null; const WP = {}
 let alProgreso = null
 function whisper() {
   if (WW) return WW
@@ -32,10 +33,13 @@ export async function audioA16k(blob) {
 }
 export async function transcribir(blob, onProg) {
   alProgreso = onProg; const t0 = performance.now()
-  onProg?.(listoVoz ? 'Escuchando…' : `Preparando el asistente de voz (la 1.ª vez descarga unos ${IA.vozMB} MB; después funciona sin internet)…`, listoVoz ? null : 1)
+  const clave = motorVoz() === 'precisa' ? 'precisa' : 'rapida', M = IA.voz[clave]
+  if (WM !== clave && WW) { WW.terminate(); WW = null; listoVoz = false }
+  WM = clave
+  onProg?.(listoVoz ? 'Escuchando…' : `Preparando el asistente de voz (la 1.ª vez descarga unos ${M.mb} MB; después funciona sin internet)…`, listoVoz ? null : 1)
   const audio = await audioA16k(blob); medidas.audioSeg = audio.length / 16000
   const w = whisper()
-  const r = await new Promise((ok, mal) => { const id = ++WN; WP[id] = [ok, mal]; w.postMessage({ id, audio, cfg: { modelos: IA.modelos, ort: IA.ort, whisper: IA.whisper, whisperDtype: IA.whisperDtype, partes: IA.partes } }, [audio.buffer]) })
+  const r = await new Promise((ok, mal) => { const id = ++WN; WP[id] = [ok, mal]; w.postMessage({ id, audio, cfg: { modelos: IA.modelos, ort: IA.ort, whisper: M.whisper, whisperDtype: IA.whisperDtype, partes: M.partes } }, [audio.buffer]) })
   medidas.transcribirMs = r.ms; medidas.vozTotalMs = performance.now() - t0; medidas.texto = r.text
   return r.text
 }

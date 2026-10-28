@@ -1,3 +1,4 @@
+import { motorVoz, ponerMotorVoz, MOTORES, ReconocimientoNativo } from '../ia/preferencias.js'
 import { useRef, useState } from 'react'
 import { useApp } from '../components/contexto.js'
 import { Campo, Chip, Tabla } from '../components/ui.jsx'
@@ -10,6 +11,12 @@ import { dbCompleta, exportarRespaldo, restaurarRespaldo, restablecerDemo, repo 
 import { fechaISO, fechaHora, diasEntre } from '../lib/fechas.js'
 import { MAX_RESPALDO_BYTES } from '../lib/respaldo.js'
 
+function MotorVoz() {
+  const [m, setM] = useState(motorVoz()), nativo = !!ReconocimientoNativo()
+  return <section className="tarjeta" aria-label="Voz"><h2>Voz</h2><p className="sub">Elige cómo se escucha lo que dictas.{nativo ? ' Este equipo tiene dictado propio.' : ' Este equipo no tiene dictado propio: Automático usa la voz rápida.'}</p>
+    <div role="radiogroup" aria-label="Motor de voz" className="acciones-col">{MOTORES.map(([k, t, d]) => <label key={k} className={`opcion-voz ${m === k ? 'on' : ''}`}><input type="radio" name="motor-voz" checked={m === k} onChange={() => { ponerMotorVoz(k); setM(k) }} /><span><b>{t}</b><small>{d}</small></span></label>)}</div>
+    <p className="ayuda">Truco en iPhone: en «Escribir» puedes tocar el micrófono del teclado y dictar.</p></section>
+}
 export default function Mas() {
   const { vista: db, sesion, rol, can, ir, aviso, confirmar, salir, tema, setTema, recargar } = useApp()
   const [v, setV] = useState({ id: '', codigo: '' }), [res, setRes] = useState(null), [ocupado, setOcupado] = useState(false), arch = useRef(null)
@@ -34,6 +41,7 @@ export default function Mas() {
     <div className="pagina">
       <h1>Más opciones</h1><p className="sub">{sesion.nombre} · {NOMBRE_ROL[rol]}</p>
       {otras.length > 0 && <section className="tarjeta solo-celular" aria-label="Otras secciones"><h2>Otras secciones</h2><div className="acciones-col">{otras.map(n => <button key={n.ruta} type="button" className="btn suave grande" onClick={() => ir(n.ruta)}><Icono n={n.icono} />{n.texto}</button>)}</div></section>}
+      <MotorVoz />
       {can('exportar') && <section className="tarjeta" aria-label="Exportar a Excel"><h2>Exportar a Excel</h2><p className="sub">Todo lo que ves en la aplicación, en archivos de Excel que puedes guardar o imprimir.</p>
         <div className="acciones-fila"><button type="button" className="btn" onClick={() => excel()}><Icono n="bajar" />Todo en un solo Excel</button>
           {['Ventas', 'Stock', 'Tiendas', 'Caja'].map(h => <button key={h} type="button" className="btn suave" onClick={() => excel(h)}>Solo {h.toLowerCase()}</button>)}</div></section>}
