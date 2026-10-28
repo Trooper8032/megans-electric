@@ -9,7 +9,7 @@ Desarrollado por Sandro Rivera Peñares · RIVERGREEN SOLUTIONS.
 npm install
 npm run dev          # desarrollo
 npm run build && npm run preview   # versión final en http://127.0.0.1:4328
-node scripts/preparar_ia.mjs   # una vez: copia/baja los modelos de IA a public/ia (~95 MB, no van al repositorio)
+node scripts/preparar_ia.mjs   # una vez: copia/baja los modelos de IA a public/ia (~250 MB con Whisper small, no van al repositorio)
 npm test             # 120 pruebas (Vitest)
 python scripts/e2e.py         # recorrido por rol + axe + capturas (necesita Playwright y Chrome)
 python scripts/e2e_venta.py   # venta en 3 toques por rol (admin, coadmin, vendedor1) en celular 390 y escritorio 1440 + capturas venta-*; incluye escaneo por teclado, venta delegada y verificación de pagos

@@ -32,10 +32,10 @@ export async function audioA16k(blob) {
 }
 export async function transcribir(blob, onProg) {
   alProgreso = onProg; const t0 = performance.now()
-  onProg?.(listoVoz ? 'Escuchando…' : 'Preparando el asistente de voz (la 1.ª vez descarga unos 80 MB)…', listoVoz ? null : 1)
+  onProg?.(listoVoz ? 'Escuchando…' : `Preparando el asistente de voz (la 1.ª vez descarga unos ${IA.vozMB} MB; después funciona sin internet)…`, listoVoz ? null : 1)
   const audio = await audioA16k(blob); medidas.audioSeg = audio.length / 16000
   const w = whisper()
-  const r = await new Promise((ok, mal) => { const id = ++WN; WP[id] = [ok, mal]; w.postMessage({ id, audio, cfg: { modelos: IA.modelos, ort: IA.ort, whisper: IA.whisper, whisperDtype: IA.whisperDtype } }, [audio.buffer]) })
+  const r = await new Promise((ok, mal) => { const id = ++WN; WP[id] = [ok, mal]; w.postMessage({ id, audio, cfg: { modelos: IA.modelos, ort: IA.ort, whisper: IA.whisper, whisperDtype: IA.whisperDtype, partes: IA.partes } }, [audio.buffer]) })
   medidas.transcribirMs = r.ms; medidas.vozTotalMs = performance.now() - t0; medidas.texto = r.text
   return r.text
 }

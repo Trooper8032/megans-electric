@@ -319,3 +319,35 @@ rect.serie-0,.cuadro.serie-0{fill:var(--g0)}rect.serie-1{fill:var(--g1)}rect.ser
 .cv-cant{display:inline-flex;align-items:center;gap:.35rem}.cv-cant .icono-btn{width:32px;height:32px;font-size:1.1rem}
 .cv-total{font-size:1.15rem;margin:.5rem 0}.alerta.verde{background:var(--ok-l, #e7f6ec);color:var(--ok, #1d7a3e)}
 .dev-pend .dev-item{padding:.7rem .9rem}.dev-pend .dev-item p{margin:.15rem 0}.cv-medio{display:inline-flex;gap:.4rem;align-items:center}
+/* ---- Ajuste visual (Sandro): letra un poco más chica, menos carga, avisos que no tapan ---- */
+html{font-size:15.5px}@media(min-width:1000px){html{font-size:16px}}@media(max-width:599px){html{font-size:15px}}
+h1{font-size:clamp(1.35rem,4.6vw,1.75rem)}h2{font-size:1.1rem}h3{font-size:1rem}
+.btn{min-height:46px;padding:.55rem 1rem}.btn.chico{min-height:40px;font-size:.9rem}.btn.grande{min-height:54px;font-size:1.05rem}
+.medio{min-height:52px;font-size:1rem}.kpi-val{font-size:1.45rem}@media(min-width:900px){.kpi-val{font-size:1.6rem}}
+.venta-hero-btn{min-height:76px;padding:.8rem 1.1rem}.venta-hero-btn strong{font-size:1.3rem}.venta-hero-btn .vh-ico{width:50px;height:50px}@media(min-width:900px){.venta-hero-btn{min-height:84px}.venta-hero-btn strong{font-size:1.45rem}}
+.lateral nav button{font-size:.98rem;padding:.6rem .9rem}.lateral nav button.destacado{font-size:1.02rem;min-height:52px}
+.cv-mic .ia-mic{min-height:62px;font-size:1.1rem}.centro-voz{padding:.85rem .95rem;border-width:1.5px}
+.cv-ejemplos .btn.chico{font-size:.85rem;min-height:36px;padding:.3rem .75rem}
+@media(max-width:599px){.cv-ejemplos .btn:nth-child(n+4){display:none}}
+.cats{flex-wrap:wrap;overflow-x:visible}.cat{min-height:40px}
+.acciones-fila + .tarjeta,.pagina > .acciones-fila{margin-bottom:.8rem}
+.filtro-cat select,#inv-cat{min-width:220px;max-width:100%}
+/* Avisos: pequeños, arriba, sin tapar la barra de cobro ni el contenido; no bloquean toques */
+.toast-zona{top:calc(env(safe-area-inset-top) + 64px);bottom:auto}@media(min-width:1000px){.toast-zona{top:1rem;left:auto;right:1rem;align-items:flex-end;padding:0}}
+.toast{padding:.5rem .85rem;font-size:.9rem;border-radius:10px;max-width:min(92vw,380px);animation:sube .18s ease-out;opacity:.97}
+@keyframes sube{from{opacity:0;transform:translateY(-6px)}}
+.modal-fondo{background:rgba(10,10,40,.38)}
+.barra-v,.barra-h{animation-duration:.35s}.linea-p{animation-duration:.45s}
+@media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}*,*::before,*::after{animation:none!important;transition:none!important}}
+.titulo-fila{margin-bottom:.8rem}
+/* Barra de cobro siempre ENCIMA del menú de abajo (iPhone con zona segura) y todo el contenido alcanzable con scroll */
+:root{--nav-h:62px;--safe-b:env(safe-area-inset-bottom,0px)}
+@media(max-width:999px){
+  .nav-mov{position:fixed;left:0;right:0;bottom:0;min-height:calc(var(--nav-h) + var(--safe-b));box-sizing:border-box}
+  .nav-mov{height:calc(var(--nav-h) + var(--safe-b))}
+  .nav-mov button{min-height:0;height:var(--nav-h);padding:.35rem 0;font-size:.68rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .app{padding-bottom:calc(var(--nav-h) + var(--safe-b) + 16px)}
+  main{padding-bottom:calc(96px + 1rem)}
+  .barra-fija{bottom:calc(var(--nav-h) + var(--safe-b) + 8px)}
+  .toast-zona{top:calc(var(--safe-t,env(safe-area-inset-top,0px)) + 64px)}
+}

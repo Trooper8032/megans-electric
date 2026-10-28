@@ -131,3 +131,11 @@ describe('devolución: siempre con aprobación manual de la administradora', asy
     expect(x.solicitud.estado).toBe('Rechazada'); expect(x.db.devoluciones.length).toBe(db.devoluciones.length)
   })
 })
+
+describe('errores de oído de Whisper small', async () => {
+  const db = await demo(), P = db.productos
+  it('«Quirente/Kilente» = cliente y «YAP» = Yape', () => {
+    expect(entenderVenta('Tres cajas de dos polos y una caja de 24 polos. Efectivo. Quirente Marilla López.', P)).toMatchObject({ medio: 'Efectivo', cliente: 'Marilla López' })
+    expect(entenderVenta('Dos cables número 12 y un tomacorriente doble, YAP, Kilente Juan.', P)).toMatchObject({ medio: 'Yape', cliente: 'Juan' })
+  })
+})

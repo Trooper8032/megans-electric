@@ -11,7 +11,7 @@ const NUM = { cero: 0, un: 1, uno: 1, una: 1, dos: 2, tres: 3, cuatro: 4, cinco:
 const OIDO = [
   [/\b(?:ya|y\s*a)\s*(?:pe|p|ve|be|per?)\b'?|\bjp\b|\bdi?ope\b|\byapé\b/gi, ' yape '],
   [/\b(?:a|lo?s\s+a)?plink?\b/gi, ' plin '],
-  [/\b(?:qui[dl]+ente|quillente|tienta|clente|cliendte)\b/gi, ' cliente '], [/\bper\s*cliente\b|\bpercliente\b/gi, ' yape cliente '],
+  [/\b(?:qui[dlr]+ente|[kq]u?ilente|quillente|tienta|clente|cliendte)\b/gi, ' cliente '], [/\byap\b/gi, ' yape '], [/\bper\s*cliente\b|\bpercliente\b/gi, ' yape cliente '],
   [/\binefectivo\b/gi, 'en efectivo'], [/,?\s*(?:él\s+)?\bapag[oó](?![a-z])/gi, ' ya pagó'], [/\bme\s*deben\b|\bmedeben\b|\bmi deben\b/gi, 'me deben'],
   [/\btienes\s+me deben\b/gi, 'quienes me deben'], [/\bdebes la tienda\b/gi, 'debe la tienda'], [/\bhabre\b/gi, 'abre'], [/\banuna\b/gi, 'anula'],
   [/\bmaca como\b/gi, 'marca como'], [/\bcobra da\b/gi, 'cobrada'], [/\ben\s+chuf\w*/gi, ' enchufe'], [/\bdosenchufe/gi, 'dos enchufe'],

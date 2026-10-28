@@ -35,7 +35,7 @@ export default function App() {
   useEffect(() => { const r = document.documentElement; if (tema) r.setAttribute('data-tema', tema); else r.removeAttribute('data-tema') }, [tema])
   const temaActual = tema || (matchMedia('(prefers-color-scheme: dark)').matches ? 'oscuro' : 'claro')
 
-  const aviso = useCallback((texto, tipo = 'ok') => { const id = Math.random(); setAvisos(a => [...a, { id, texto, tipo }]); setTimeout(() => setAvisos(a => a.filter(x => x.id !== id)), tipo === 'error' ? 6500 : 3500) }, [])
+  const aviso = useCallback((texto, tipo = 'ok') => { const id = Math.random(); setAvisos(a => [...a, { id, texto, tipo }]); setTimeout(() => setAvisos(a => a.filter(x => x.id !== id)), tipo === 'error' ? 5000 : 2500) }, [])
   const confirmar = useCallback(datos => new Promise(res => setConf({ datos, res })), [])
   const resolver = r => { conf.res(r); setConf(null) }
 
